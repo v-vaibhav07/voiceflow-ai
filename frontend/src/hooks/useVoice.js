@@ -6232,9 +6232,6 @@
 
 
 
-
-
-
 /**
  * useVoice v3 — stable voice orchestration hook
  *
@@ -6249,6 +6246,13 @@
  * WebSocket is created ONCE for the lifetime of this hook.
  * We intentionally do NOT put changing hook objects in the
  * WebSocket effect dependency array.
+ *
+ * v3.1 fix:
+ *   Both the browser SpeechRecognition path AND the server-STT
+ *   path now stop listening automatically after ONE finished
+ *   utterance, instead of continuing to listen indefinitely
+ *   (which could previously pick up the assistant's own voice
+ *   reply or just leave the mic open forever until a manual tap).
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { VoiceSocket } from '../api/voiceApi';
@@ -7032,6 +7036,25 @@ export function useVoice({
         if (text) {
           submitUserSpeechRef.current(text);
         }
+
+        // Server-side STT (Deepgram) path:
+        // stop listening after one finished utterance
+        // instead of leaving the audio stream open
+        // indefinitely — mirrors the browser
+        // SpeechRecognition behavior below.
+        if (serverSTTActiveRef.current) {
+          try {
+            socketRef.current?.stopAudioStream();
+          } catch {}
+
+          try {
+            audioCaptureRef.current?.stop();
+          } catch {}
+
+          serverSTTActiveRef.current = false;
+
+          setMicActive(false);
+        }
       }
     );
 
@@ -7205,6 +7228,18 @@ export function useVoice({
         submitUserSpeechRef.current(
           finalText
         );
+
+        // Stop listening after ONE finished utterance
+        // instead of staying open indefinitely
+        // (continuous = true would otherwise keep the
+        // mic listening forever — including picking up
+        // the assistant's own spoken reply — until the
+        // user manually taps the mic button off).
+        recognizer._shouldRestart = false;
+
+        try {
+          recognizer.stop();
+        } catch {}
       }
     };
 
