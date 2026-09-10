@@ -512,6 +512,10 @@ app.use(errorHandler);
 const server =
   http.createServer(app);
 
+server.on('upgrade', (req) => {
+  console.log('🔥 UPGRADE REQUEST:', req.url);
+});
+
 // ─────────────────────────────────────────────
 // WebSocket Server
 // ─────────────────────────────────────────────
